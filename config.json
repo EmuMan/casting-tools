@@ -1,0 +1,180 @@
+{
+    "use_midi_controller": true,
+    "obs": {
+        "host": "localhost",
+        "port": 4455,
+        "password": "password"
+    },
+    "midi_bindings": [
+        {
+            "note": 36,
+            "actions": [
+                {
+                    "type": "trigger_studio_mode_transition"
+                }
+            ]
+        },
+        {
+            "note": 38,
+            "actions": [
+                {
+                    "type": "toggle_input_mute",
+                    "name": "Desktop Audio"
+                }
+            ]
+        },
+        {
+            "note": 39,
+            "actions": [
+                {
+                    "type": "toggle_input_mute",
+                    "name": "Microphone"
+                }
+            ]
+        },
+        {
+            "note": 40,
+            "actions": [
+                {
+                    "type": "set_current_preview_scene",
+                    "name": "Waiting"
+                }
+            ]
+        },
+        {
+            "note": 41,
+            "actions": [
+                {
+                    "type": "set_current_preview_scene",
+                    "name": "Game Only"
+                }
+            ]
+        },
+        {
+            "note": 42,
+            "actions": [
+                {
+                    "type": "set_current_preview_scene",
+                    "name": "Casters"
+                }
+            ]
+        },
+        {
+            "note": 43,
+            "actions": [
+                {
+                    "type": "set_current_preview_scene",
+                    "name": "Casters 2"
+                }
+            ]
+        },
+        {
+            "note": 44,
+            "actions": [
+                {
+                    "type": "set_current_scene_transition",
+                    "name": "Base Stinger"
+                }
+            ]
+        },
+        {
+            "note": 45,
+            "actions": [
+                {
+                    "type": "set_current_scene_transition",
+                    "name": "Fade"
+                }
+            ]
+        },
+        {
+            "note": 46,
+            "actions": [
+                {
+                    "type": "set_current_scene_transition",
+                    "name": "Cut"
+                }
+            ]
+        },
+        {
+            "note": 50,
+            "actions": [
+                {
+                    "type": "set_source_visibility",
+                    "scene": "Waiting",
+                    "name": "Starting In",
+                    "visible": true
+                },
+                {
+                    "type": "set_source_visibility",
+                    "scene": "Waiting",
+                    "name": "Resuming In",
+                    "visible": false
+                }
+            ]
+        },
+        {
+            "note": 51,
+            "actions": [
+                {
+                    "type": "set_source_visibility",
+                    "scene": "Waiting",
+                    "name": "Starting In",
+                    "visible": false
+                },
+                {
+                    "type": "set_source_visibility",
+                    "scene": "Waiting",
+                    "name": "Resuming In",
+                    "visible": true
+                }
+            ]
+        }
+    ],
+    "keyboard_bindings": [
+        {
+            "key": "f1",
+            "actions": [
+                {
+                    "type": "set_spectated_player",
+                    "index": 0
+                }
+            ]
+        },
+        {
+            "key": "f2",
+            "actions": [
+                {
+                    "type": "set_spectated_player",
+                    "index": 1
+                }
+            ]
+        },
+        {
+            "key": "f3",
+            "actions": [
+                {
+                    "type": "set_spectated_player",
+                    "index": 2
+                }
+            ]
+        },
+        {
+            "key": "f4",
+            "actions": [
+                {
+                    "type": "set_spectated_player",
+                    "index": 3
+                }
+            ]
+        },
+        {
+            "key": "f5",
+            "actions": [
+                {
+                    "type": "set_spectated_player",
+                    "index": 4
+                }
+            ]
+        }
+    ]
+}
