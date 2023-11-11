@@ -1,5 +1,6 @@
 {
     "use_midi_controller": true,
+    "use_output_audio": true,
     "obs": {
         "host": "localhost",
         "port": 4455,
@@ -173,6 +174,23 @@
                 {
                     "type": "set_spectated_player",
                     "index": 4
+                }
+            ]
+        },
+        {
+            "key": "f11",
+            "actions": [
+                {
+                    "type": "play_audio",
+                    "folder": "./music"
+                }
+            ]
+        },
+        {
+            "key": "f12",
+            "actions": [
+                {
+                    "type": "stop_audio"
                 }
             ]
         }
