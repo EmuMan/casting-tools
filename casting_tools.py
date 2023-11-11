@@ -166,7 +166,8 @@ def create_on_message(obs_client: obs.ReqClient, midi_bindings: list[dict]) -> C
                 perform_actions(obs_client, binding['actions'])
     return on_message
 
-def perform_actions(obs_client: obs.ReqClient, actions: list[dict]) -> None:
+def perform_actions(obs_client: obs.ReqClient, actions: list[dict], *_) -> None:
+    # TODO: Use keyboard event that is passed in now I guess
     for action in actions:
         perform_action(obs_client, action)
 
@@ -219,11 +220,16 @@ def get_midi_input_device() -> Any: # idk what actual type is
     
     return controller
 
-def get_audio_output_device() -> int:
+def get_audio_output_device() -> dict[str, Any]:
     devices = sd.query_devices()
+    for device in devices:
+        device['is_output'] = device['max_output_channels'] > 0
     print('Select an audio output device (type the number):')
     for i, device in enumerate(devices, start=1):
-        print(f'\t{i}: {device["name"]}')
+        if device['is_output']:
+            if device['index'] == sd.default.device[1]:
+                print('>', end='')
+            print(f'\t{i}: {device["name"]}')
     print()
 
     while True:
@@ -235,7 +241,7 @@ def get_audio_output_device() -> int:
         except IndexError:
             print(f'Error: Selection must be between 1 and {len(devices)}')
 
-def main() -> None:    
+def main() -> None:
     try:
         with open('config.json', 'r') as f:
             config = json.load(f)
@@ -244,23 +250,30 @@ def main() -> None:
         return
     
     print('Connecting to OBS... ', end='')
-    obs_client = obs.ReqClient(
-        host=config['obs']['host'],
-        port=config['obs']['port'],
-        password=config['obs']['password'],
-        timeout=3)
+    try:
+        obs_client = obs.ReqClient(
+            host=config['obs']['host'],
+            port=config['obs']['port'],
+            password=config['obs']['password'],
+            timeout=3)
+    except ConnectionRefusedError:
+        print('Error!')
+        print('Could not connect to OBS! Make sure you have a websocket server open.')
+        return
     print('connected!')
 
     midi_controller = None
     if config['use_midi_controller']:
+        print()
         midi_controller = get_midi_input_device()
         if midi_controller is None:
             # could not find a valid controller
             return
     
-    if config['use_audio']:
+    if config['use_output_audio']:
+        print()
         global audio_output_device
-        audio_output_device = get_audio_output_device()
+        audio_output_device = get_audio_output_device()['index']
     
     for binding in config['keyboard_bindings']:
         keyboard.on_press_key(binding['key'],
@@ -268,6 +281,9 @@ def main() -> None:
     character_switch_thread = threading.Thread(target=move_to_target_loop)
     character_switch_thread.daemon = True
     character_switch_thread.start()
+
+    print()
+    print('Listening for actions...')
 
     try:
         if midi_controller is not None:
