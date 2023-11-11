@@ -104,6 +104,7 @@ class SoundPlayer:
                     break
                 data = self.soundfile.read(self.block_size)
                 if music_fade_out_length > 0:
+                    global current_music_fade_out_progress
                     if current_music_fade_out_progress == music_fade_out_length:
                         # done fading out
                         break
@@ -117,7 +118,6 @@ class SoundPlayer:
                         data = data[:(new_fade_out_progress - current_music_fade_out_progress)]
                     # apply the fade out
                     data *= fade_out[current_music_fade_out_progress:new_fade_out_progress]
-                    global current_music_fade_out_progress
                     current_music_fade_out_progress = new_fade_out_progress
                 self._queue.put(data, timeout=timeout)
             music_end_event.wait()  # Wait until playback is finished
