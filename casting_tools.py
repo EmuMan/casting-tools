@@ -27,6 +27,8 @@ target_character_index = 0
 
 music_end_event = threading.Event()
 audio_output_device = None
+music_fade_out_length = 0
+current_music_fade_out_progress = 0
 
 
 class OBSInterfaceException(Exception):
@@ -101,6 +103,22 @@ class SoundPlayer:
                 if music_end_event.is_set():
                     break
                 data = self.soundfile.read(self.block_size)
+                if music_fade_out_length > 0:
+                    if current_music_fade_out_progress == music_fade_out_length:
+                        # done fading out
+                        break
+                    # big range that will be sliced
+                    fade_out = np.arange(1.0, 0.0, -(1.0 / music_fade_out_length))
+                    new_fade_out_progress = current_music_fade_out_progress + len(data)
+                    # fade out progress should cap at the length
+                    if new_fade_out_progress > music_fade_out_length:
+                        new_fade_out_progress = music_fade_out_length
+                        # shorten data to match if fade out progress was shortened
+                        data = data[:(new_fade_out_progress - current_music_fade_out_progress)]
+                    # apply the fade out
+                    data *= fade_out[current_music_fade_out_progress:new_fade_out_progress]
+                    global current_music_fade_out_progress
+                    current_music_fade_out_progress = new_fade_out_progress
                 self._queue.put(data, timeout=timeout)
             music_end_event.wait()  # Wait until playback is finished
         
@@ -126,6 +144,12 @@ def play_random_song(folder_path: str, device: int | str) -> threading.Thread:
     songs = os.listdir(folder_path)
     song = random.choice(songs)
     return create_music_thread(os.path.join(folder_path, song), device)
+
+def fade_out_music(length: int) -> None:
+    global music_fade_out_length
+    global current_music_fade_out_progress
+    music_fade_out_length = length
+    current_music_fade_out_progress = 0
 
 def get_source(obs_client: obs.ReqClient, scene_name: str, source_name: str) -> Any:
     scene_items = obs_client.get_scene_item_list(name=scene_name).scene_items
@@ -192,6 +216,8 @@ def perform_action(obs_client: obs.ReqClient, action: dict) -> None:
             play_random_song(action['folder'], audio_output_device)
         case 'stop_audio':
             music_end_event.set()
+        case 'fade_out_audio':
+            fade_out_music(action['length'])
 
 def get_midi_input_device() -> Any: # idk what actual type is
     controller = None

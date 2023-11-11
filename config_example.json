@@ -190,7 +190,8 @@
             "key": "f12",
             "actions": [
                 {
-                    "type": "stop_audio"
+                    "type": "fade_out_audio",
+                    "length": 100000
                 }
             ]
         }
