@@ -103,6 +103,7 @@ class SoundPlayer:
                 if music_end_event.is_set():
                     break
                 data = self.soundfile.read(self.block_size)
+                global music_fade_out_length
                 if music_fade_out_length > 0:
                     global current_music_fade_out_progress
                     if current_music_fade_out_progress == music_fade_out_length:
@@ -114,12 +115,18 @@ class SoundPlayer:
                     # fade out progress should cap at the length
                     if new_fade_out_progress > music_fade_out_length:
                         new_fade_out_progress = music_fade_out_length
+                        music_fade_out_length = 0
                         # shorten data to match if fade out progress was shortened
                         data = data[:(new_fade_out_progress - current_music_fade_out_progress)]
                     # apply the fade out
-                    data *= fade_out[current_music_fade_out_progress:new_fade_out_progress]
+                    fade_out = fade_out[current_music_fade_out_progress:new_fade_out_progress]
+                    data *= np.vstack([fade_out, fade_out]).T
                     current_music_fade_out_progress = new_fade_out_progress
-                self._queue.put(data, timeout=timeout)
+                try:
+                    self._queue.put(data, timeout=timeout)
+                except queue.Full:
+                    # yucky fix
+                    pass
             music_end_event.wait()  # Wait until playback is finished
         
         # Clean up
