@@ -22,6 +22,10 @@ MUSIC_BUFFERSIZE = 20 # number of blocks in the buffer
 MUSIC_BLOCKSIZE = 2048 # size of each sample block
 
 
+# god this is awful
+log = print
+
+
 current_character_index = 0
 target_character_index = 0
 
@@ -60,13 +64,13 @@ class SoundPlayer:
     def callback(self, outdata, frames, time, status):
         assert frames == self.block_size
         if status.output_underflow:
-            print('Output underflow: increase blocksize?', file=sys.stderr)
+            log('Output underflow: increase blocksize?', file=sys.stderr)
             raise sd.CallbackAbort
         assert not status
         try:
             data = self._queue.get_nowait()
         except queue.Empty as e:
-            print('Buffer is empty: increase buffersize?', file=sys.stderr)
+            log('Buffer is empty: increase buffersize?', file=sys.stderr)
             raise sd.CallbackAbort from e
         if len(data) < len(outdata):
             outdata[:len(data)] = data
@@ -147,16 +151,21 @@ def create_music_thread(filename: str,
     music_thread.start()
     return music_thread
 
-def play_random_song(folder_path: str, device: int | str) -> threading.Thread:
+def play_random_audio(folder_path: str, device: int | str | None) -> threading.Thread:
+    if device is None:
+        log('Error: To play audio, \'use_output_audio\' must be set to true in config.json')
     songs = os.listdir(folder_path)
     song = random.choice(songs)
     return create_music_thread(os.path.join(folder_path, song), device)
 
-def fade_out_music(length: int) -> None:
+def fade_out_audio(length: int) -> None:
     global music_fade_out_length
     global current_music_fade_out_progress
     music_fade_out_length = length
     current_music_fade_out_progress = 0
+
+def stop_audio() -> None:
+    music_end_event.set()
 
 def get_source(obs_client: obs.ReqClient, scene_name: str, source_name: str) -> Any:
     scene_items = obs_client.get_scene_item_list(name=scene_name).scene_items
@@ -172,6 +181,10 @@ def set_source_visibility(obs_client: obs.ReqClient, scene_name: str, source_nam
 def get_source_visibility(obs_client: obs.ReqClient, scene_name: str, source_name: str) -> bool:
     source = get_source(obs_client, scene_name, source_name)
     return source['sceneItemEnabled']
+
+def set_spectated_player(index: int) -> None:
+    global target_character_index
+    target_character_index = index
 
 def move_to_target_loop() -> None:
     global current_character_index
@@ -191,7 +204,7 @@ def create_on_message(obs_client: obs.ReqClient, midi_bindings: list[dict]) -> C
     def on_message(message: mido.Message) -> None:
         if message.type != 'note_on':
             return
-        print(f'MIDI note pressed: {message.note}')
+        log(f'MIDI note pressed: {message.note}')
         for binding in midi_bindings:
             if binding['note'] == message.note:
                 perform_actions(obs_client, binding['actions'])
@@ -215,98 +228,118 @@ def perform_action(obs_client: obs.ReqClient, action: dict) -> None:
         case 'set_source_visibility':
             set_source_visibility(obs_client, action['scene'], action['name'], action['visible'])
         case 'set_spectated_player':
-            global target_character_index
-            target_character_index = action['index']
-        case 'play_audio':
-            if audio_output_device is None:
-                print('Error: To play audio, \'use_output_audio\' must be set to true in config.json')
-            play_random_song(action['folder'], audio_output_device)
+            set_spectated_player(action['index'])
+        case 'play_random_audio':
+            play_random_audio(action['folder'], audio_output_device)
         case 'stop_audio':
             music_end_event.set()
         case 'fade_out_audio':
-            fade_out_music(action['length'])
+            fade_out_audio(action['length'])
 
 def get_midi_input_device() -> Any: # idk what actual type is
     controller = None
     controllers = mido.get_input_names()
 
     if len(controllers) == 0:
-        print('No available controllers found. Exiting...')
+        log('No available controllers found. Exiting...')
         return None
     elif len(controllers) == 1:
         controller = controllers[0]
 
     if controller is None:
-        print('Choose an available controller (type the number):')
+        log('Choose an available controller (type the number):')
         for i, option in enumerate(controllers, start=1):
-            print(f'\t{i}: {option}')
-        print()
+            log(f'\t{i}: {option}')
+        log()
 
     while controller is None:
         user_input = input('Selected controller: ')
         try:
             controller = controllers[int(user_input) - 1]
         except ValueError:
-            print('Error: Selection must be a valid integer.')
+            log('Error: Selection must be a valid integer.')
         except IndexError:
-            print(f'Error: Selection must be between 1 and {len(controllers)}')
+            log(f'Error: Selection must be between 1 and {len(controllers)}')
     
     return controller
+
+def list_possible_audio_devices() -> list[str]:
+    devices = sd.query_devices()
+    devices = {device['index']: device['name'] for device in devices if device['max_output_channels'] > 0}
+    devices[sd.default.device[1]] += ' (default)'
+    return [f'{str(index)}: {name}' for index, name in sorted(list(devices.items()), key=lambda x: x[0])]
+
+def set_audio_output_device(device: int) -> None:
+    global audio_output_device
+    audio_output_device = device
 
 def get_audio_output_device() -> dict[str, Any]:
     devices = sd.query_devices()
     for device in devices:
         device['is_output'] = device['max_output_channels'] > 0
-    print('Select an audio output device (type the number):')
+    log('Select an audio output device (type the number):')
     for i, device in enumerate(devices, start=1):
         if device['is_output']:
             if device['index'] == sd.default.device[1]:
-                print('>', end='')
-            print(f'\t{i}: {device["name"]}')
-    print()
+                log('>', end='')
+            log(f'\t{i}: {device["name"]}')
+    log()
 
     while True:
         user_input = input('Selected device: ')
         try:
             return devices[int(user_input) - 1]
         except ValueError:
-            print('Error: Selection must be a valid integer.')
+            log('Error: Selection must be a valid integer.')
         except IndexError:
-            print(f'Error: Selection must be between 1 and {len(devices)}')
+            log(f'Error: Selection must be between 1 and {len(devices)}')
+
+def connect_to_obs(host: str, port: int | str, password: str) -> obs.ReqClient | None:
+    try:
+        port = int(port)
+    except ValueError:
+        log('Port number must be a valid integer!')
+    log('Connecting to OBS... ', end='')
+    try:
+        obs_client = obs.ReqClient(
+            host=host,
+            port=port,
+            password=password,
+            timeout=3)
+    except ConnectionRefusedError:
+        log('Error!')
+        log('Could not connect to OBS! Make sure you have a websocket server open.')
+        return
+    log('connected!')
+    return obs_client
 
 def main() -> None:
     try:
         with open('config.json', 'r') as f:
             config = json.load(f)
     except OSError as e:
-        print(f'Error opening config.json: {e}. Exiting...')
+        log(f'Error opening config.json: {e}. Exiting...')
         return
     
-    print('Connecting to OBS... ', end='')
-    try:
-        obs_client = obs.ReqClient(
-            host=config['obs']['host'],
-            port=config['obs']['port'],
-            password=config['obs']['password'],
-            timeout=3)
-    except ConnectionRefusedError:
-        print('Error!')
-        print('Could not connect to OBS! Make sure you have a websocket server open.')
+    obs_client = connect_to_obs(
+        host=config['obs']['host'],
+        port=config['obs']['port'],
+        password=config['obs']['password'],
+    )
+    if obs_client is None:
         return
-    print('connected!')
 
     midi_controller = None
     if config['use_midi_controller']:
-        print()
+        log()
         midi_controller = get_midi_input_device()
         if midi_controller is None:
             # could not find a valid controller
             return
     
     if config['use_output_audio']:
-        print()
-        global audio_output_device
-        audio_output_device = get_audio_output_device()['index']
+        log()
+        set_audio_output_device(get_audio_output_device()['index'])
     
     for binding in config['keyboard_bindings']:
         keyboard.on_press_key(binding['key'],
@@ -315,8 +348,8 @@ def main() -> None:
     character_switch_thread.daemon = True
     character_switch_thread.start()
 
-    print()
-    print('Listening for actions...')
+    log()
+    log('Listening for actions...')
 
     try:
         if midi_controller is not None:

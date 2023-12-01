@@ -181,7 +181,7 @@
             "key": "f11",
             "actions": [
                 {
-                    "type": "play_audio",
+                    "type": "play_random_audio",
                     "folder": "./music"
                 }
             ]
