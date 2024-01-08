@@ -2,6 +2,7 @@ import tkinter as tk
 import tkinter.ttk as ttk
 from typing import Callable, Any
 from dataclasses import dataclass
+import json
 
 import obsws_python as obs
 
@@ -26,7 +27,7 @@ class Action:
 
     @classmethod
     def get_variable_init_fields(cls) -> list[tuple[str, Any]]:
-        return [p for p in cls.__init__.__annotations__.items() if p[0] not in {'return', 'key', 'obs_client'}]
+        return [p for p in cls.__init__.__annotations__.items() if p[0] not in {'return', 'key', 'gui'}]
 
 @dataclass
 class NoneAction(Action):
@@ -39,47 +40,47 @@ class NoneAction(Action):
 
 class TriggerStudioModeTransitionAction(Action):
     
-    def __init__(self, key: str, obs_client: obs.ReqClient, **_):
+    def __init__(self, key: str, gui: 'CastingToolsGUI', **_):
         super().__init__(
             name='Trigger Studio Mode Transition',
             key=key,
-            action=lambda: obs_client.trigger_studio_mode_transition(),
+            action=lambda: gui.obs_client.trigger_studio_mode_transition(),
         )
 
 class ToggleInputMuteAction(Action):
     
     input_name: str
 
-    def __init__(self, key: str, obs_client: obs.ReqClient, input_name: str, **_):
+    def __init__(self, key: str, gui: 'CastingToolsGUI', input_name: str, **_):
         self.input_name = input_name
         super().__init__(
             name='Toggle Input Mute',
             key=key,
-            action=lambda: obs_client.toggle_input_mute(input_name),
+            action=lambda: gui.obs_client.toggle_input_mute(input_name),
         )
 
 class SetCurrentPreviewSceneAction(Action):
     
     scene_name: str
     
-    def __init__(self, key: str, obs_client: obs.ReqClient, scene_name: str, **_):
+    def __init__(self, key: str, gui: 'CastingToolsGUI', scene_name: str, **_):
         self.scene_name = scene_name
         super().__init__(
             name='Set Current Preview Scene',
             key=key,
-            action=lambda: obs_client.set_current_preview_scene(scene_name),
+            action=lambda: gui.obs_client.set_current_preview_scene(scene_name),
         )
 
 class SetCurrentSceneTransitionAction(Action):
     
     transition_name: str
     
-    def __init__(self, key: str, obs_client: obs.ReqClient, transition_name: str, **_):
+    def __init__(self, key: str, gui: 'CastingToolsGUI', transition_name: str, **_):
         self.transition_name = transition_name
         super().__init__(
             name='Set Current Scene Transition',
             key=key,
-            action=lambda: obs_client.set_current_scene_transition(transition_name),
+            action=lambda: gui.obs_client.set_current_scene_transition(transition_name),
         )
 
 class SetSourceVisibilityAction(Action):
@@ -88,14 +89,14 @@ class SetSourceVisibilityAction(Action):
     source_name: str
     visibility: bool
     
-    def __init__(self, key: str, obs_client: obs.ReqClient, scene_name: str, source_name: str, visibility: bool, **_):
+    def __init__(self, key: str, gui: 'CastingToolsGUI', scene_name: str, source_name: str, visibility: bool, **_):
         self.scene_name = scene_name
         self.source_name = source_name
         self.visibility = visibility
         super().__init__(
             name='Set Source Visibility',
             key=key,
-            action=lambda: ct.set_source_visibility(obs_client, scene_name, source_name, visibility),
+            action=lambda: ct.set_source_visibility(gui.obs_client, scene_name, source_name, visibility),
         )
 
 class SetSpectatedPlayerAction(Action):
@@ -331,7 +332,7 @@ class CastingToolsGUI:
                 return
             kwargs = dict(zip((f[0] for f in init_fields), casted))
             kwargs['key'] = original.key
-            kwargs['obs_client'] = self.obs_client
+            kwargs['gui'] = self
             new_action = action_type(**kwargs)
             self.update_action(original, new_action)
             window.destroy()
@@ -503,6 +504,12 @@ class CastingToolsGUI:
         
         # Create a button to add a MIDI device.
         ttk.Button(frame, text='Add MIDI Device', command=lambda: None).pack(side=tk.LEFT, padx=5)
+        
+        # Create a button to save to the config file.
+        ttk.Button(frame, text='Save Config', command=lambda: self.save_config('config.json')).pack(side=tk.LEFT, padx=5)
+        
+        # Create a button to load from the config file.
+        ttk.Button(frame, text='Load Config', command=lambda: self.load_config('config.json')).pack(side=tk.LEFT, padx=5)
     
     def configure_status_frame(self, frame: tk.Frame) -> None:
         '''Create a frame of connection status information.'''        
@@ -529,6 +536,48 @@ class CastingToolsGUI:
         self.add_action(test_action_1)
         self.add_action(test_action_2)
         self.add_action(test_action_3)
+    
+    def _action_to_json(self, action: Action) -> dict:
+        '''Convert an action to a JSON object.'''
+        return {
+            'name': action.name,
+            'key': action.key,
+            'args': action.get_args(),
+        }
+    
+    def _json_to_action(self, json: dict) -> Action:
+        '''Convert a JSON object to an action.'''
+        action_type = action_types[json['name']]
+        init_fields: list[tuple[str, Any]] = action_type.get_variable_init_fields()
+        args = json['args']
+        kwargs = dict(zip((f[0] for f in init_fields), args))
+        kwargs['key'] = json['key']
+        kwargs['gui'] = self
+        return action_type(**kwargs)
+    
+    def save_config(self, filename: str) -> None:
+        '''Save the current configuration to a file in JSON format.'''
+        data = {}
+        for keybind, actions in self.keybinds.items():
+            actions = [self._action_to_json(a) for a in actions]
+            data[keybind] = actions
+            
+        with open(filename, 'w') as f:
+            json.dump(data, f, indent=4)
+    
+    def load_config(self, filename: str) -> None:
+        '''Load a configuration from a file in JSON format.'''
+        with open(filename, 'r') as f:
+            data = json.load(f)
+        
+        self.keybind_list.delete(*self.keybind_list.get_children())
+        self.action_list.delete(*self.action_list.get_children())
+        self.keybinds.clear()
+        
+        for _, actions in data.items():
+            for action in actions:
+                self.add_action(self._json_to_action(action))
+
 
 def main():
     gui = CastingToolsGUI()
